@@ -1,103 +1,197 @@
-import Image from "next/image";
+"use client";
+import { useState, useEffect } from "react";
+import { supabase } from "../lib/supabaseClient";
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.js
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [movie, setMovie] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [genre, setGenre] = useState("");
+  const [favorites, setFavorites] = useState([]);
+  const [comments, setComments] = useState([]);
+  const [newComment, setNewComment] = useState("");
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+  // Fetch from Supabase
+  useEffect(() => {
+    fetchFavorites();
+    fetchComments();
+
+    // Real-time updates
+    const commentsSub = supabase
+      .channel("public:comments")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "comments" },
+        fetchComments
+      )
+      .subscribe();
+
+    const favoritesSub = supabase
+      .channel("public:favorites")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "favorites" },
+        fetchFavorites
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(commentsSub);
+      supabase.removeChannel(favoritesSub);
+    };
+  }, []);
+
+  const fetchComments = async () => {
+    const { data } = await supabase
+      .from("comments")
+      .select("*")
+      .order("created_at", { ascending: false });
+    setComments(data || []);
+  };
+
+  const fetchFavorites = async () => {
+    const { data } = await supabase
+      .from("favorites")
+      .select("*")
+      .order("created_at", { ascending: false });
+    setFavorites(data || []);
+  };
+
+  const fetchMovie = async () => {
+    setLoading(true);
+    const res = await fetch(`/api/random-movie?genre=${genre}`);
+    const data = await res.json();
+    setMovie(data);
+    setLoading(false);
+  };
+
+  const addFavorite = async () => {
+    if (!movie) return;
+    await supabase
+      .from("favorites")
+      .insert([{ title: movie.title, year: movie.year }]);
+  };
+
+  const addComment = async () => {
+    if (!newComment.trim()) return;
+    await supabase.from("comments").insert([{ text: newComment.trim() }]);
+    setNewComment("");
+  };
+
+  return (
+    <div className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden">
+    
+
+      {/* Main Container */}
+      <div className="relative z-10 w-full max-w-4xl flex flex-col items-center gap-6 text-white p-6">
+        <h1 className="text-6xl font-extrabold text-center mb-4">
+          Stream Flick🎬
+        </h1>
+
+        {/* Genre filter */}
+        <select
+          className="mb-4 p-3 rounded bg-gray-900 text-white border border-green-600"
+          value={genre}
+          onChange={(e) => setGenre(e.target.value)}
+        >
+          <option value="">Any Genre</option>
+          <option value="action">Action</option>
+          <option value="comedy">Comedy</option>
+          <option value="horror">Horror</option>
+          <option value="drama">Drama</option>
+        </select>
+
+        {/* Suggest Movie Button */}
+        {/* Suggest Movie Button */}
+<button
+  onClick={fetchMovie}
+  className="btn-hulk px-8 py-3 bg-green-600 rounded-xl font-bold text-lg"
+>
+  Suggest a Movie
+</button>
+
+{loading && (
+  <div className="mt-6 flex flex-col items-center">
+    <img 
+      src="https://i.imgur.com/cbxw10m.gif"   // replace with your gif path
+      alt="Loading Hulk"
+      className="w-25 h-25 mb-2" 
+    />
+    <span className="text-lg font-semibold text-white">
+      Smashing a movie for you
+    </span>
+  </div>
+)}
+
+
+        {/* Movie Card */}
+        {movie && (
+          <div className="card-hover mt-6 p-6 bg-gray-900 bg-opacity-80 rounded-xl shadow-2xl w-full flex flex-col items-center text-center transition">
+            {movie.poster && (
+              <img
+                src={movie.poster}
+                alt={movie.title}
+                className="w-72 rounded-lg mb-4 shadow-lg"
+              />
+            )}
+            <h2 className="text-3xl font-bold">{movie.title}</h2>
+            <p className="text-gray-300 mt-3">Year: {movie.year}</p>
+            <p className="mt-4 text-gray-200">{movie.plot}</p>
+            <button
+              onClick={addFavorite}
+              className="btn-hulk mt-4 px-5 py-2 bg-green-700 rounded font-semibold"
+            >
+            Add to Favorites ❤️
+            </button>
+          </div>
+        )}
+
+        {/* Favorites */}
+        {favorites.length > 0 && (
+          <div className="mt-10 w-full">
+            <h3 className="text-3xl font-bold mb-4 glow-green">⭐ Favorites</h3>
+            <ul className="space-y-2">
+              {favorites.map((f) => (
+                <li
+                  key={f.id}
+                  className="p-3 bg-gray-800 rounded-lg hover:bg-gray-700 transition"
+                >
+                  {f.title} ({f.year})
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Comments */}
+        <div className="mt-10 w-full">
+          <h3 className="text-3xl font-bold mb-4">Comments💬</h3>
+          <div className="flex gap-2 mb-4">
+            <input
+              type="text"
+              placeholder="Write a comment..."
+              className="flex-1 p-3 rounded bg-gray-900 border border-green-600 text-white"
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            <button
+              onClick={addComment}
+              className="btn-hulk px-6 py-2 bg-green-600 rounded font-semibold"
+            >
+              Post
+            </button>
+          </div>
+          <ul className="space-y-2">
+            {comments.map((c) => (
+              <li
+                key={c.id}
+                className="p-3 bg-gray-800 rounded hover:bg-gray-700 transition"
+              >
+                {c.text}
+              </li>
+            ))}
+          </ul>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </div>
     </div>
   );
 }
